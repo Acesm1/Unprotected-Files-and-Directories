@@ -64,6 +64,11 @@ web-archive-analysis
 
 sensitive-data-exposure
 
+# BNB
+
+# Binance smart chain (Network)
+# 0x8bb4266573dfcfb3719611a94231f547356ba546 (address)
+**discord server link** : https://discord.gg/cXxnptmw
 
 
 
