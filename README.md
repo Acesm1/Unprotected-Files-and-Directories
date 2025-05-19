@@ -1,23 +1,23 @@
-![ChatGPT Image](ChatGPT%20Image%20May%2019,%202025,%2008_33_37%20PM.png)
+![Ace Image](Aceimages.png)
 Darknickon File Disclosure Scanner is a high-performance, multithreaded Java tool designed to detect and analyze sensitive file exposures across web archives. It leverages the Wayback Machine's CDX API to retrieve historical URLs, filters them based on file extensions indicative of sensitive data (e.g., .sql, .pdf, .docx, .zip), and assesses their accessibility. This tool is invaluable for penetration testers, bug bounty hunters, and security researchers aiming to uncover inadvertent file disclosures and misconfigurations.
-![ChatGPT Result](ChatGPT%20Image%20May%2019,%202025,%2008_33_37%20PM.png)
-🔍 Key Features
+![Ace Image](Aceimages.png)
+# 🔍 Key Features
 Wayback Machine Integration: Retrieves archived URLs for a specified domain using the CDX API.
 
-Extension-Based Filtering: Targets URLs ending with potentially sensitive file extensions.
+**Extension-Based Filtering**: Targets URLs ending with potentially sensitive file extensions.
 
-Multithreaded Scanning: Utilizes concurrent threads to efficiently check the availability of filtered URLs.
+*Multithreaded Scanning*: Utilizes concurrent threads to efficiently check the availability of filtered URLs.
 
-Status Code Evaluation: Identifies accessible files by analyzing HTTP response codes.
+*Status Code Evaluation*: Identifies accessible files by analyzing HTTP response codes.
 
-Automated Downloading: Optionally downloads accessible files of a specified extension for further analysis.
+**Automated Downloading**: Optionally downloads accessible files of a specified extension for further analysis.
 
-Customizable Parameters: Allows users to set thread count, timeout durations, and acceptable HTTP status codes.
+**Customizable Parameters**: Allows users to set thread count, timeout durations, and acceptable HTTP status codes.
 
-📘 Usage
+# 📘 Usage
 bash
 Copy code
-''java -jar FileDisclosureScanner.jar -u <domain> [options]
+*java -jar FileDisclosureScanner.jar -u <domain> [options]
 Options:
 
 -u <domain>: Target domain (required)
@@ -32,7 +32,7 @@ Options:
 
 --status <codes>: Comma-separated list of acceptable HTTP status codes (default: 200,301,302,307,308,403)
 
--h, --help: Display help message''
+-h, --help: Display help message*
 
 Examples:
 
@@ -41,8 +41,7 @@ Copy code
 java -jar FileDisclosureScanner.jar -u example.com
 java -jar FileDisclosureScanner.jar -u example.com -o results.txt
 java -jar FileDisclosureScanner.jar -u example.com --A pdf
-🏷️ Suggested GitHub Tags for Enhanced Visibility
-To maximize the discoverability of your project on GitHub, consider adding the following topics to your repository:
+# 🏷️ Tags 
 
 vulnerability-scanner
 
