@@ -1,0 +1,349 @@
+import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.*;
+
+public class FileDisclosureScanner {
+
+    // ANSI Colors
+    public static final String BLUE = "\u001B[34m";
+    public static final String GREEN = "\u001B[32m";
+    public static final String RED = "\u001B[31m";
+    public static final String RESET = "\u001B[0m";
+
+    // File disclosure extensions (used for filtering)
+    static final String EXTENSION_REGEX =
+        "\\.(xls|xml|xlsx|json|pdf|sql|doc|docx|pptx|txt|zip|tar|gz|tgz|bak|7z|rar|log|cache|secret|db|backup|yml|config|csv|yaml|md|md5|exe|dll|bin|class|sh|deb|rpm|iso|img|vhd|msi|dmg|tmp|crt|pem|key|pub|asc|apk)(\\?|$|#)";
+
+    static final String WAYBACK_API = "https://web.archive.org/cdx/search/cdx";
+
+    static int threadCount = 12;
+    static int timeout = 8000; // ms
+    static Set<Integer> allowedStatus = new HashSet<>(Arrays.asList(200, 301, 302, 307, 308, 403));
+    static String userAgent = "FileDisclosureScanner/1.0 (+https://github.com/Acesm1/FileDisclosureScanner)";
+    static Pattern extPattern = Pattern.compile(EXTENSION_REGEX, Pattern.CASE_INSENSITIVE);
+
+    public static void main(String[] args) {
+        // Gracefully handle Ctrl+C
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println(RED + "\n[!] Interrupted by user. Exiting..." + RESET);
+        }));
+
+        try {
+            if (args.length == 0 || (args.length == 1 && (args[0].equals("-h") || args[0].equals("--help")))) {
+                printHelp();
+                return;
+            }
+            printBanner();
+
+            // Argument parsing
+            String domain = null;
+            String outputPath = null;
+            String autoDownloadExt = null;
+            for (int i = 0; i < args.length; i++) {
+                switch (args[i]) {
+                    case "-u":
+                        domain = args[++i];
+                        break;
+                    case "-o":
+                        outputPath = args[++i];
+                        break;
+                    case "--threads":
+                        threadCount = Integer.parseInt(args[++i]);
+                        break;
+                    case "--timeout":
+                        timeout = Integer.parseInt(args[++i]);
+                        break;
+                    case "--status":
+                        allowedStatus = new HashSet<>();
+                        for (String status : args[++i].split(",")) allowedStatus.add(Integer.parseInt(status.trim()));
+                        break;
+                    case "--A":
+                        autoDownloadExt = args[++i].toLowerCase();
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            if (domain == null) {
+                System.out.println(RED + "[!] Usage: java -jar scanner.jar -u <domain> [-o output.txt] [--A pdf] [--threads N] [--timeout ms] [--status 200,403]" + RESET);
+                return;
+            }
+
+            System.out.println(BLUE + "[*] Target: " + domain + RESET); 
+
+            // Fetch all URLs from Wayback (with pagination)
+            List<String> urls = fetchWaybackURLsWithPagination(domain);
+
+            System.out.println(BLUE + "[*] Total Wayback URLs: " + urls.size() + RESET);
+
+            // Deduplicate URLs
+            Set<String> uniqueUrls = new HashSet<>(urls);
+
+            // Filter URLs by extension
+            List<String> filteredUrls = new ArrayList<>();
+            for (String url : uniqueUrls) {
+                if (extPattern.matcher(url).find()) {
+                    filteredUrls.add(url);
+                }
+            }
+
+            System.out.println(BLUE + "[*] URLs with interesting extensions: " + filteredUrls.size() + RESET);
+
+            if (autoDownloadExt != null) {
+                System.out.println(BLUE + "[*] Downloading all '" + autoDownloadExt + "' files from Wayback..." + RESET);
+                downloadArchivedFiles(filteredUrls, autoDownloadExt, domain);
+                return; // Only do download in this mode.
+            }
+
+            // Check URLs for alive status using threads
+            ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+            List<String> flagged = Collections.synchronizedList(new ArrayList<>());
+            AtomicInteger checked = new AtomicInteger();
+            int total = filteredUrls.size();
+
+            for (String url : filteredUrls) {
+                pool.submit(() -> {
+                    try {
+                        int code = getStatusCode(url);
+                        if (allowedStatus.contains(code)) {
+                            System.out.println(GREEN + "[+] Found: " + url + " (HTTP " + code + ")" + RESET);
+                            flagged.add(url + "\t" + code);
+                        }
+                        int done = checked.incrementAndGet();
+                        if (done % 50 == 0 || done == total) {
+                            System.out.println(BLUE + "[*] Checked " + done + " / " + total + " URLs..." + RESET);
+                        }
+                    } catch (Exception e) {
+                        logError("Error checking URL: " + url + " - " + e.getMessage());
+                    }
+                });
+            }
+            pool.shutdown();
+            pool.awaitTermination(1, TimeUnit.HOURS);
+
+            if (outputPath != null) {
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+                    for (String hit : flagged) {
+                        writer.write(hit + "\n");
+                    }
+                    System.out.println(GREEN + "[*] Results saved to: " + outputPath + RESET);
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println(RED + "[!] Fatal Error: " + e.getMessage() + RESET);
+            e.printStackTrace();
+        }
+    }
+
+    // Fetch Wayback URLs with pagination
+    static List<String> fetchWaybackURLsWithPagination(String domain) {
+        List<String> urls = new ArrayList<>();
+        int pageSize = 40000; // CDX API max limit per page
+        int offset = 0;
+        boolean more = true;
+
+        while (more) {
+            try {
+                String api = WAYBACK_API
+                    + "?url=*." + URLEncoder.encode(domain, "UTF-8") + "/*"
+                    + "&collapse=urlkey"
+                    + "&output=text"
+                    + "&fl=original"
+                    + "&limit=" + pageSize
+                    + "&offset=" + offset;
+                HttpURLConnection conn = (HttpURLConnection) new URL(api).openConnection();
+                conn.setRequestProperty("User-Agent", userAgent);
+                conn.setConnectTimeout(timeout);
+                conn.setReadTimeout(timeout);
+
+                int code = conn.getResponseCode();
+                if (code != 200) {
+                    logError("Wayback API returned HTTP " + code);
+                    break;
+                }
+
+                int count = 0;
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        urls.add(line.trim());
+                        count++;
+                    }
+                }
+                if (count < pageSize) {
+                    more = false;
+                } else {
+                    offset += pageSize;
+                }
+            } catch (Exception e) {
+                logError("Error fetching Wayback URLs: " + e.getMessage());
+                break;
+            }
+        }
+        return urls;
+    }
+
+    // Get HTTP Status code (HEAD, fallback to GET)
+    static int getStatusCode(String urlString) {
+        int code = -1;
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(urlString).openConnection();
+            conn.setRequestMethod("HEAD");
+            conn.setInstanceFollowRedirects(true);
+            conn.setConnectTimeout(timeout);
+            conn.setReadTimeout(timeout);
+            conn.setRequestProperty("User-Agent", userAgent);
+            code = conn.getResponseCode();
+            if (code == 405 || code == 400) { // Some servers don't support HEAD
+                conn = (HttpURLConnection) new URL(urlString).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setInstanceFollowRedirects(true);
+                conn.setConnectTimeout(timeout);
+                conn.setReadTimeout(timeout);
+                conn.setRequestProperty("User-Agent", userAgent);
+                code = conn.getResponseCode();
+            }
+        } catch (Exception e) {
+            logError("Status check failed: " + urlString + " - " + e.getMessage());
+        }
+        return code;
+    }
+
+    // Download archived files for a given extension (latest 200 snapshot)
+    static void downloadArchivedFiles(List<String> urls, String ext, String domain) {
+        List<String> extUrls = new ArrayList<>();
+        Pattern pattern = Pattern.compile("\\." + Pattern.quote(ext) + "(\\?|$|#)", Pattern.CASE_INSENSITIVE);
+        for (String url : urls) {
+            if (pattern.matcher(url).find()) {
+                extUrls.add(url);
+            }
+        }
+
+        System.out.println(BLUE + "[*] " + extUrls.size() + " URLs match extension ." + ext + RESET);
+        if (extUrls.isEmpty()) return;
+
+        Path outDir = Paths.get(ext);
+        try {
+            Files.createDirectories(outDir);
+        } catch (IOException e) {
+            logError("Failed to create output directory: " + outDir + " - " + e.getMessage());
+            return;
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        AtomicInteger completed = new AtomicInteger();
+        int total = extUrls.size();
+
+        for (String originalUrl : extUrls) {
+            pool.submit(() -> {
+                try {
+                    // Query CDX API for the latest 200 snapshot (newest first)
+                    String api = WAYBACK_API
+                        + "?url=" + URLEncoder.encode(originalUrl, "UTF-8")
+                        + "&output=json"
+                        + "&fl=timestamp,statuscode,original"
+                        + "&filter=statuscode:200"
+                        + "&limit=1"
+                        + "&sort=reverse";
+                    HttpURLConnection conn = (HttpURLConnection) new URL(api).openConnection();
+                    conn.setRequestProperty("User-Agent", userAgent);
+                    conn.setConnectTimeout(timeout);
+                    conn.setReadTimeout(timeout);
+
+                    String timestamp = null;
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                        String line;
+                        boolean headerSkipped = false;
+                        while ((line = reader.readLine()) != null) {
+                            if (!headerSkipped) { headerSkipped = true; continue; } // skip header
+                            if (line.trim().isEmpty()) continue;
+                            // Parse JSON array for [timestamp, statuscode, original]
+                            String[] parts = line.replaceAll("[\\[\\]\"]", "").split(",");
+                            if (parts.length >= 3 && "200".equals(parts[1].trim())) {
+                                timestamp = parts[0].trim();
+                                break;
+                            }
+                        }
+                    }
+
+                    if (timestamp != null) {
+                        String waybackUrl = "https://web.archive.org/web/" + timestamp + "id_/" + originalUrl;
+                        String filename = originalUrl.replaceAll(".*/", "");
+                        if (filename.isEmpty()) filename = "file_" + timestamp + "." + ext;
+                        Path outPath = outDir.resolve(filename);
+                        downloadFile(waybackUrl, outPath);
+                    }
+
+                } catch (Exception e) {
+                    logError("Download failed for: " + originalUrl + " - " + e.getMessage());
+                }
+                int done = completed.incrementAndGet();
+                if (done % 10 == 0 || done == total) {
+                    System.out.println(BLUE + "[*] Downloaded " + done + " / " + total + " files..." + RESET);
+                }
+            });
+        }
+        pool.shutdown();
+        try {
+            pool.awaitTermination(2, TimeUnit.HOURS);
+        } catch (InterruptedException e) {
+            logError("Download pool interrupted.");
+        }
+        System.out.println(GREEN + "[*] All downloads complete. Files saved in '" + ext + "' folder." + RESET);
+    }
+
+    static void downloadFile(String url, Path outPath) {
+        try (InputStream in = new URL(url).openStream()) {
+            Files.copy(in, outPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            logError("Failed to download " + url + ": " + e.getMessage());
+        }
+    }
+
+    static void logError(String msg) {
+        try {
+            System.err.println(RED + "[!] " + msg + RESET);
+            try (BufferedWriter err = new BufferedWriter(new FileWriter("scanner_errors.log", true))) {
+                err.write(msg + "\n");
+            }
+        } catch (IOException ignore) {}
+    }
+
+    public static void printBanner() {
+        System.out.println(BLUE + """
+  ____             _        _    _ _ _             
+ |  _ \\  __ _ _ __(_) ___  | |  (_) (_)_ __   __ _ 
+ | | | |/ _` | '__| |/ __| | |  | | | | '_ \\ / _` |
+ | |_| | (_| | |  | | (__  | |__| | | | | | | (_| |
+ |____/ \\__,_|_|  |_|\\___| |____|_|_|_|_| |_|\\__, |
+                                            |___/
+     DARKNICKON FILE DISCLOSURE SCANNER by ACE_SMITH
+""" + RESET);
+    }
+
+    public static void printHelp() {
+        System.out.println(BLUE + """
+Usage: java -jar scanner.jar -u <domain> [options]
+
+Options:
+  -u <domain>         Target domain (required)
+  -o <output.txt>     Save results to output.txt
+  --A <ext>           Download all files of extension <ext> (e.g. pdf)
+  --threads <n>       Number of parallel threads (default 12)
+  --timeout <ms>      HTTP timeout in milliseconds (default 8000)
+  --status <codes>    Comma separated allowed HTTP status codes (default 200,301,302,307,308,403)
+  -h, --help          Show this help message
+
+Examples:
+  java -jar scanner.jar -u example.com
+  java -jar scanner.jar -u example.com -o results.txt
+  java -jar scanner.jar -u example.com --A pdf
+""" + RESET);
+    }
+}
