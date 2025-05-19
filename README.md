@@ -17,7 +17,7 @@ Customizable Parameters: Allows users to set thread count, timeout durations, an
 📘 Usage
 bash
 Copy code
-java -jar FileDisclosureScanner.jar -u <domain> [options]
+''java -jar FileDisclosureScanner.jar -u <domain> [options]
 Options:
 
 -u <domain>: Target domain (required)
@@ -32,7 +32,7 @@ Options:
 
 --status <codes>: Comma-separated list of acceptable HTTP status codes (default: 200,301,302,307,308,403)
 
--h, --help: Display help message
+-h, --help: Display help message''
 
 Examples:
 
@@ -63,50 +63,6 @@ java-security
 web-archive-analysis
 
 sensitive-data-exposure
-
-These tags align with common search terms used by the security community and will help position your tool alongside similar projects.
-
-🚀 Promotion Strategy
-GitHub Optimization:
-
-Repository Description: Craft a concise and informative description highlighting the tool's purpose and capabilities.
-
-README.md: Include detailed usage instructions, examples, and screenshots or GIFs demonstrating the tool in action.
-
-Topics/Tags: Add the suggested GitHub topics to improve searchability.
-
-Community Engagement:
-
-Security Forums: Share your project on platforms like Reddit's r/netsec, r/bugbounty, and r/ethicalhacking.
-
-Twitter/X: Announce releases and updates using relevant hashtags such as #BugBounty, #Infosec, and #OSINT.
-
-Blog Posts and Tutorials:
-
-Write articles detailing the tool's features, use cases, and real-world applications.
-
-Create tutorials or walkthroughs demonstrating how to use the tool effectively.
-
-Integration with Other Tools:
-
-Explore integrating your scanner with other security tools or frameworks to enhance its functionality and reach.
-
-📸 Visual Assets
-To further promote your tool, consider creating visual assets such as:
-
-Screenshots: Capture the tool's output and interface during scans.
-
-Diagrams: Illustrate the scanning process and how the tool interacts with the Wayback Machine.
-
-Demo Videos: Record short videos demonstrating the tool's setup and usage.
-
-These assets can be included in your GitHub repository, shared on social media, and embedded in blog posts to provide a clearer understanding of the tool's capabilities.
-
-By implementing these strategies, you'll enhance the visibility and adoption of your Darknickon File Disclosure Scanner within the security community. If you need assistance with any of these steps, feel free to ask!
-
-
-Sources
-
 
 
 
