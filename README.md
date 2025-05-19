@@ -17,7 +17,8 @@ Wayback Machine Integration: Retrieves archived URLs for a specified domain usin
 # 📘 Usage
 bash
 Copy code
-*java -jar FileDisclosureScanner.jar -u <domain> [options]
+
+*java -jar FileDisclosureScanner.jar -u <domain> [options]*
 Options:
 
 -u <domain>: Target domain (required)
@@ -28,11 +29,11 @@ Options:
 
 --threads <n>: Number of parallel threads (default: 12)
 
---timeout <ms>: HTTP timeout in milliseconds (default: 8000)
+**--timeout <ms>: HTTP timeout in milliseconds (default: 8000)**
 
 --status <codes>: Comma-separated list of acceptable HTTP status codes (default: 200,301,302,307,308,403)
 
--h, --help: Display help message*
+_-h, --help: Display help message_
 
 Examples:
 
