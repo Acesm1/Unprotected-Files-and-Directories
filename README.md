@@ -1,3 +1,5 @@
+
+[▶️ Watch Aceback.mp4](https://github.com/Acesm1/Unprotected-Files-and-Directories/raw/main/Aceback.mp4)
 ![Ace Image](Aceimages.png)
 Darknickon File Disclosure Scanner is a high-performance, multithreaded Java tool designed to detect and analyze sensitive file exposures across web archives. It leverages the Wayback Machine's CDX API to retrieve historical URLs, filters them based on file extensions indicative of sensitive data (e.g., .sql, .pdf, .docx, .zip), and assesses their accessibility. This tool is invaluable for penetration testers, bug bounty hunters, and security researchers aiming to uncover inadvertent file disclosures and misconfigurations.
 ![Ace Image](Aceimages.png)
